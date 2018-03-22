@@ -35,6 +35,58 @@ public class IslandHandler
     private Gson      gson;
     public  HashMap<String, Island> islandMap = new HashMap<>();
 
+
+    private class Point
+    {
+        public int x, y;
+
+        public Point(int x, int y)
+        {
+            this.x = x;
+            this.y = y;
+        }
+    }
+
+    //convert d to (x,y) <stolen from wikipedia>
+    private Point hilbert_d2xy(int n, int d)
+    {
+        Point a = new Point(0,0);
+        int rx=0, ry=0, s=0, t=d;
+        for (s=1; s<n; s*=2) {
+            rx = 1 & (t/2);
+            ry = 1 & (t ^ rx);
+            hilbert_rot(s, a, rx, ry);
+            a.x += s * rx;
+            a.y += s * ry;
+            t /= 4;
+        }
+        return a;
+    }
+
+    //rotate/flip a quadrant appropriately <stolen from wikipedia>
+    private void hilbert_rot(int n, Point a, int rx, int ry)
+    {
+        if (ry == 0) {
+            if (rx == 1) {
+                a.x = n-1 - a.x;
+                a.y = n-1 - a.y;
+            }
+
+            //Swap x and y
+            int t  = a.x;
+            a.x = a.y;
+            a.y = t;
+        }
+    }
+
+    private Point hilbert_point(int num)
+    {
+        // ensure the power of 2 used is even to preserve the pattern over any number
+        int power = (int)Math.ceil(Math.log((double)num)/Math.log(2)/2) * 2;
+        power = Math.max(power, 2);
+        return hilbert_d2xy((int)Math.pow(2,power), num);
+    }
+
     @SubscribeEvent
     public void onPlayerLoggedIn(PlayerEvent.PlayerLoggedInEvent e)
     {
@@ -50,17 +102,26 @@ public class IslandHandler
                 List<Integer> xPosList = new ArrayList<Integer>();
                 islandMap.forEach((p, i) -> xPosList.add(i.getPosX()));
                 int maxPosX = Collections.max(xPosList);
+
+                Point p = hilbert_point(xPosList.size());
+                int newXPos = p.x * IBuhngs.ModConfig.distance;
+                int newZPos = p.y * IBuhngs.ModConfig.distance;
+
                 if (!IBuhngs.ModConfig.AllowSafeIslandCreation)
                 {
-                    addToIslandListAndTeleportPlayer(player, "island_" + player.getName(), new BlockPos(maxPosX + IBuhngs.ModConfig.distance, spawnPos.getY(), spawnPos.getZ()));
+                    addToIslandListAndTeleportPlayer(player, "island_" + player.getName(), new BlockPos(newXPos, spawnPos.getY(), newZPos));
                 } else {
-                    if (Utils.isValidSpawnLoc(player.getEntityWorld(), new BlockPos(maxPosX + IBuhngs.ModConfig.distance, spawnPos.getY(), spawnPos.getZ())))
+
+                    int num = xPosList.size();
+                    while (!Utils.isValidSpawnLoc(player.getEntityWorld(), new BlockPos(newXPos, spawnPos.getY(), newZPos)))
                     {
-                        addToIslandListAndTeleportPlayer(player, "island_" + player.getName(), new BlockPos(maxPosX + IBuhngs.ModConfig.distance, spawnPos.getY(), spawnPos.getZ()));
-                    } else {
-                        int shift = maxPosX + IBuhngs.ModConfig.distance + 16;
-                        addToIslandListAndTeleportPlayer(player, "island_" + player.getName(), new BlockPos(shift, spawnPos.getY(), spawnPos.getZ()));
+                        num += 1;
+                        p = hilbert_point(num);
+                        newXPos = p.x * IBuhngs.ModConfig.distance;
+                        newZPos = p.y * IBuhngs.ModConfig.distance;
                     }
+
+                    addToIslandListAndTeleportPlayer(player, "island_" + player.getName(), new BlockPos(newXPos, spawnPos.getY(), newZPos));
                 }
             }
         }
